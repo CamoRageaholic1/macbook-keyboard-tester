@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keyboard Tester – MacBook Pro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1a1a1a;
+    color: #fff;
+    font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    transition: color 0.3s;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 780px;
+    margin-bottom: 12px;
+  }
+
+  .counter {
+    font-size: 14px;
+    color: #888;
+  }
+
+  #resetBtn {
+    background: #444;
+    color: #fff;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    margin-left: 12px;
+    transition: background 0.2s;
+  }
+  #resetBtn:hover { background: #666; }
+
+  .keyboard {
+    background: #2a2a2a;
+    border-radius: 14px;
+    padding: 12px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  }
+
+  .row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 4px;
+  }
+  .row:last-child { margin-bottom: 0; }
+
+  .key {
+    height: 42px;
+    min-width: 42px;
+    margin: 2px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    background: #e74c3c;
+    border: 1px solid #333;
+    transition: background 0.15s, transform 0.1s, box-shadow 0.1s;
+    cursor: default;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .key.pressed {
+    background: #2ecc71;
+  }
+
+  .key.active {
+    transform: scale(0.94);
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);
+  }
+
+  /* Keys that can only be activated by clicking */
+  .key.clickable {
+    cursor: pointer;
+  }
+  .key.clickable:hover {
+    filter: brightness(1.15);
+  }
+
+  /* Touch ID / Power button style */
+  .key.touchid {
+    border-radius: 50%;
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    font-size: 16px;
+  }
+
+  /* Arrow up/down container */
+  .arrow-updown {
+    display: flex;
+    flex-direction: column;
+    margin: 2px;
+    gap: 2px;
+  }
+  .arrow-updown .key {
+    height: 19px;
+    margin: 0;
+    font-size: 10px;
+  }
+
+  .notes {
+    color: #555;
+    font-size: 12px;
+    margin-top: 16px;
+    max-width: 680px;
+    text-align: center;
+    line-height: 1.6;
+  }
+  .notes b { color: #777; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1 id="title">Keyboard Tester</h1>
+  <div>
+    <span class="counter" id="counter">0 / 0 keys tested</span>
+    <button id="resetBtn">Reset</button>
+  </div>
+</div>
+
+<div class="keyboard" id="keyboard"></div>
+<div class="notes">
+  Press keys to test them. Click <b>Reset</b> to start over.<br>
+  <b>fn</b> and <b>Touch ID</b> can't be detected by the browser — click them to mark as tested.<br>
+  Some F-keys (F11, F12, etc.) may be grabbed by macOS. Unbind them in<br>
+  <b>System Settings → Keyboard → Keyboard Shortcuts → Mission Control</b>.
+</div>
+
+<script>
+// ── Layout Definition ──────────────────────────────────────────
+// Each key: [label, widthUnits, [...keyCodes], options]
+// keyCodes from KeyboardEvent.code
+// options: { clickable: true } = can only be tested by clicking
+//          { touchid: true }   = round power/Touch ID button
+//          { split: true }     = up/down arrow split
+
+const ROWS = [
+  // Function row
+  [
+    ["esc",  1.0, ["Escape"]],
+    ["F1",   1.0, ["F1"]],
+    ["F2",   1.0, ["F2"]],
+    ["F3",   1.0, ["F3"]],
+    ["F4",   1.0, ["F4"]],
+    ["F5",   1.0, ["F5"]],
+    ["F6",   1.0, ["F6"]],
+    ["F7",   1.0, ["F7"]],
+    ["F8",   1.0, ["F8"]],
+    ["F9",   1.0, ["F9"]],
+    ["F10",  1.0, ["F10"]],
+    ["F11",  1.0, ["F11"]],
+    ["F12",  1.0, ["F12"]],
+    ["⏻",   1.0, ["__touchid__"], { touchid: true, clickable: true }],
+  ],
+  // Number row
+  [
+    ["`",      1.0, ["Backquote"]],
+    ["1",      1.0, ["Digit1"]],
+    ["2",      1.0, ["Digit2"]],
+    ["3",      1.0, ["Digit3"]],
+    ["4",      1.0, ["Digit4"]],
+    ["5",      1.0, ["Digit5"]],
+    ["6",      1.0, ["Digit6"]],
+    ["7",      1.0, ["Digit7"]],
+    ["8",      1.0, ["Digit8"]],
+    ["9",      1.0, ["Digit9"]],
+    ["0",      1.0, ["Digit0"]],
+    ["-",      1.0, ["Minus"]],
+    ["=",      1.0, ["Equal"]],
+    ["delete", 1.5, ["Backspace"]],
+  ],
+  // QWERTY row
+  [
+    ["tab", 1.5, ["Tab"]],
+    ["Q",   1.0, ["KeyQ"]],
+    ["W",   1.0, ["KeyW"]],
+    ["E",   1.0, ["KeyE"]],
+    ["R",   1.0, ["KeyR"]],
+    ["T",   1.0, ["KeyT"]],
+    ["Y",   1.0, ["KeyY"]],
+    ["U",   1.0, ["KeyU"]],
+    ["I",   1.0, ["KeyI"]],
+    ["O",   1.0, ["KeyO"]],
+    ["P",   1.0, ["KeyP"]],
+    ["[",   1.0, ["BracketLeft"]],
+    ["]",   1.0, ["BracketRight"]],
+    ["\\",  1.0, ["Backslash"]],
+  ],
+  // Home row
+  [
+    ["caps",   1.75, ["CapsLock"]],
+    ["A",      1.0,  ["KeyA"]],
+    ["S",      1.0,  ["KeyS"]],
+    ["D",      1.0,  ["KeyD"]],
+    ["F",      1.0,  ["KeyF"]],
+    ["G",      1.0,  ["KeyG"]],
+    ["H",      1.0,  ["KeyH"]],
+    ["J",      1.0,  ["KeyJ"]],
+    ["K",      1.0,  ["KeyK"]],
+    ["L",      1.0,  ["KeyL"]],
+    [";",      1.0,  ["Semicolon"]],
+    ["'",      1.0,  ["Quote"]],
+    ["return", 1.75, ["Enter"]],
+  ],
+  // Shift row
+  [
+    ["shift", 2.25, ["ShiftLeft"]],
+    ["Z",     1.0,  ["KeyZ"]],
+    ["X",     1.0,  ["KeyX"]],
+    ["C",     1.0,  ["KeyC"]],
+    ["V",     1.0,  ["KeyV"]],
+    ["B",     1.0,  ["KeyB"]],
+    ["N",     1.0,  ["KeyN"]],
+    ["M",     1.0,  ["KeyM"]],
+    [",",     1.0,  ["Comma"]],
+    [".",     1.0,  ["Period"]],
+    ["/",     1.0,  ["Slash"]],
+    ["shift", 2.25, ["ShiftRight"]],
+  ],
+  // Bottom row
+  [
+    ["fn",    1.0,  ["__fn__"], { clickable: true }],
+    ["ctrl",  1.25, ["ControlLeft"]],
+    ["opt",   1.25, ["AltLeft"]],
+    ["⌘",    1.5,  ["MetaLeft"]],
+    ["space", 5.0,  ["Space"]],
+    ["⌘",    1.5,  ["MetaRight"]],
+    ["opt",   1.25, ["AltRight"]],
+    ["←",    1.0,  ["ArrowLeft"]],
+    ["↑↓",   1.0,  ["ArrowUp", "ArrowDown"], { split: true }],
+    ["→",    1.0,  ["ArrowRight"]],
+  ],
+];
+
+const UNIT = 48;
+const codeToEl = {};
+const pressedCodes = new Set();
+let totalKeys = 0;
+
+const keyboard = document.getElementById("keyboard");
+const counter = document.getElementById("counter");
+const title = document.getElementById("title");
+const resetBtn = document.getElementById("resetBtn");
+
+// ── Build keyboard ─────────────────────────────────────────────
+ROWS.forEach(row => {
+  const rowDiv = document.createElement("div");
+  rowDiv.className = "row";
+
+  row.forEach(entry => {
+    const [label, w, codes, opts = {}] = entry;
+
+    // Special: up/down arrow split
+    if (opts.split) {
+      const container = document.createElement("div");
+      container.className = "arrow-updown";
+      container.style.width = (w * UNIT) + "px";
+
+      const upKey = makeKey("↑", w);
+      const downKey = makeKey("↓", w);
+
+      registerKey("ArrowUp", upKey);
+      registerKey("ArrowDown", downKey);
+
+      container.appendChild(upKey);
+      container.appendChild(downKey);
+      rowDiv.appendChild(container);
+      return;
+    }
+
+    const el = makeKey(label, w);
+
+    if (opts.touchid) el.classList.add("touchid");
+
+    // Clickable-only keys (fn, Touch ID)
+    if (opts.clickable) {
+      el.classList.add("clickable");
+      const clickCodes = [...codes];
+      el.addEventListener("click", () => {
+        clickCodes.forEach(code => activateCode(code));
+        // Brief press animation
+        el.classList.add("active");
+        setTimeout(() => el.classList.remove("active"), 150);
+      });
+    }
+
+    codes.forEach(code => registerKey(code, el));
+    rowDiv.appendChild(el);
+  });
+
+  keyboard.appendChild(rowDiv);
+});
+
+updateCounter();
+
+function makeKey(label, w) {
+  const el = document.createElement("div");
+  el.className = "key";
+  el.textContent = label;
+  el.style.width = (w * UNIT) + "px";
+  return el;
+}
+
+function registerKey(code, el) {
+  if (!codeToEl[code]) {
+    codeToEl[code] = [];
+    totalKeys++;
+  }
+  codeToEl[code].push(el);
+}
+
+function updateCounter() {
+  counter.textContent = `${pressedCodes.size} / ${totalKeys} keys tested`;
+}
+
+function activateCode(code) {
+  if (pressedCodes.has(code) || !codeToEl[code]) return;
+  pressedCodes.add(code);
+  codeToEl[code].forEach(el => el.classList.add("pressed"));
+  updateCounter();
+
+  if (pressedCodes.size >= totalKeys) {
+    title.textContent = "All Keys Tested!";
+    title.style.color = "#2ecc71";
+  }
+}
+
+// ── Key events ─────────────────────────────────────────────────
+document.addEventListener("keydown", e => {
+  e.preventDefault();
+  const code = e.code;
+
+  if (codeToEl[code]) {
+    codeToEl[code].forEach(el => el.classList.add("active"));
+    activateCode(code);
+  }
+});
+
+document.addEventListener("keyup", e => {
+  e.preventDefault();
+  const code = e.code;
+  if (codeToEl[code]) {
+    codeToEl[code].forEach(el => el.classList.remove("active"));
+  }
+});
+
+// ── Reset ──────────────────────────────────────────────────────
+resetBtn.addEventListener("click", () => {
+  pressedCodes.clear();
+  document.querySelectorAll(".key").forEach(el => {
+    el.classList.remove("pressed", "active");
+  });
+  title.textContent = "Keyboard Tester";
+  title.style.color = "#fff";
+  updateCounter();
+});
+</script>
+</body>
+</html>
